@@ -7,7 +7,13 @@ const wss = new WebSocket.Server({ port });
 console.log("Serveur positions prêt sur port " + port);
 
 // joueurs connectés
-const players = {}; // { pseudo: websocket }
+const players = {}; 
+
+// joueurs déconnectés récemment
+const disconnectedPlayers = {}; 
+// { pseudo: { reason: "...", time: timestamp } }
+
+const DISCONNECT_MEMORY = 5 * 60 * 1000; // 5 minutes
 
 wss.on("connection", (ws) => {
 
@@ -40,6 +46,22 @@ wss.on("connection", (ws) => {
         }
 
         // =============================
+        // VERIFIER SI JOUEUR PRESENT
+        // =============================
+        if (message.startsWith("L|")) {
+
+            const pseudo = message.slice(2);
+
+            if (players[pseudo]) {
+                ws.send("online");
+            } else {
+                ws.send("offline");
+            }
+
+            return;
+        }
+
+        // =============================
         // DEMANDE POSITION
         // =============================
         if (message.startsWith("P|")) {
@@ -52,12 +74,26 @@ wss.on("connection", (ws) => {
                 return;
             }
 
-            if (!players[target]) {
-                ws.send("joueur introuvable");
+            // joueur en ligne
+            if (players[target]) {
+                players[target].send("EP|" + requester);
                 return;
             }
 
-            players[target].send("EP|" + requester);
+            // joueur récemment déco
+            if (disconnectedPlayers[target]) {
+
+                const info = disconnectedPlayers[target];
+
+                if (Date.now() - info.time < DISCONNECT_MEMORY) {
+                    ws.send(`JD|${target}/${info.reason}`);
+                    return;
+                }
+
+                delete disconnectedPlayers[target];
+            }
+
+            ws.send("joueur introuvable");
 
             return;
         }
@@ -85,16 +121,48 @@ wss.on("connection", (ws) => {
             return;
         }
 
+        // =============================
+        // DECONNEXION AVEC RAISON
+        // =============================
+        if (message.startsWith("D|")) {
+
+            const reason = message.slice(2);
+            const pseudo = ws.pseudo;
+
+            if (!pseudo) return;
+
+            disconnectedPlayers[pseudo] = {
+                reason: reason,
+                time: Date.now()
+            };
+
+            delete players[pseudo];
+
+            ws.close();
+
+            console.log(pseudo + " expulsé : " + reason);
+
+            return;
+        }
+
     });
 
     // =============================
-    // DECONNEXION
+    // DECONNEXION NORMALE
     // =============================
     ws.on("close", () => {
 
         if (ws.pseudo && players[ws.pseudo]) {
+
+            disconnectedPlayers[ws.pseudo] = {
+                reason: "déconnexion",
+                time: Date.now()
+            };
+
             delete players[ws.pseudo];
+
             console.log(ws.pseudo + " déconnecté");
+
         }
 
     });
