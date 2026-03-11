@@ -1,11 +1,12 @@
-// server.js
 const WebSocket = require("ws");
 
-const wss = new WebSocket.Server({ port: 8080 });
+const port = process.env.PORT || 8080;
 
-console.log("Serveur positions prêt");
+const wss = new WebSocket.Server({ port });
 
-// stocker les joueurs connectés
+console.log("Serveur positions prêt sur port " + port);
+
+// joueurs connectés
 const players = {}; // { pseudo: websocket }
 
 wss.on("connection", (ws) => {
@@ -16,13 +17,19 @@ wss.on("connection", (ws) => {
 
         const message = msg.toString().trim();
 
-        // ----- ENREGISTREMENT DU PSEUDO -----
+        // =============================
+        // ENREGISTREMENT DU JOUEUR
+        // =============================
         if (message.startsWith("J|")) {
 
             const pseudo = message.slice(2);
 
-            ws.pseudo = pseudo;
+            if (players[pseudo]) {
+                ws.send("pseudo déjà utilisé");
+                return;
+            }
 
+            ws.pseudo = pseudo;
             players[pseudo] = ws;
 
             ws.send("connecté");
@@ -32,30 +39,39 @@ wss.on("connection", (ws) => {
             return;
         }
 
-        // ----- DEMANDE POSITION -----
+        // =============================
+        // DEMANDE POSITION
+        // =============================
         if (message.startsWith("P|")) {
 
             const target = message.slice(2);
-
             const requester = ws.pseudo;
+
+            if (!requester) {
+                ws.send("non enregistré");
+                return;
+            }
 
             if (!players[target]) {
                 ws.send("joueur introuvable");
                 return;
             }
 
-            // demander au joueur cible sa position
             players[target].send("EP|" + requester);
 
             return;
         }
 
-        // ----- ENVOI POSITION -----
+        // =============================
+        // ENVOI POSITION
+        // =============================
         if (message.startsWith("EPP|")) {
 
             const data = message.slice(4);
+            const parts = data.split("/");
 
-            const [requester, positionData] = data.split("/");
+            const requester = parts[0];
+            const positionData = parts.slice(1).join("/");
 
             const sender = ws.pseudo;
 
@@ -64,7 +80,6 @@ wss.on("connection", (ws) => {
                 return;
             }
 
-            // envoyer la position au demandeur
             players[requester].send(`EPP|${sender}/${positionData}`);
 
             return;
@@ -72,6 +87,9 @@ wss.on("connection", (ws) => {
 
     });
 
+    // =============================
+    // DECONNEXION
+    // =============================
     ws.on("close", () => {
 
         if (ws.pseudo && players[ws.pseudo]) {
