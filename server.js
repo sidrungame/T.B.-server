@@ -4,14 +4,13 @@ const port = process.env.PORT || 8080;
 
 const wss = new WebSocket.Server({ port });
 
-console.log("Serveur positions prêt sur port " + port);
+console.log("Serveur multijoueur prêt sur port " + port);
 
 // joueurs connectés
-const players = {}; 
+const players = {};
 
 // joueurs déconnectés récemment
-const disconnectedPlayers = {}; 
-// { pseudo: { reason: "...", time: timestamp } }
+const disconnectedPlayers = {};
 
 const DISCONNECT_MEMORY = 5 * 60 * 1000; // 5 minutes
 
@@ -24,7 +23,7 @@ wss.on("connection", (ws) => {
         const message = msg.toString().trim();
 
         // =============================
-        // ENREGISTREMENT DU JOUEUR
+        // CONNEXION JOUEUR
         // =============================
         if (message.startsWith("J|")) {
 
@@ -46,77 +45,44 @@ wss.on("connection", (ws) => {
         }
 
         // =============================
-        // VERIFIER SI JOUEUR PRESENT
+        // PING LISTE JOUEURS
         // =============================
-        if (message.startsWith("L|")) {
+        if (message.startsWith("PING|")) {
 
-            const pseudo = message.slice(2);
+            let list = "Joueurs connectés:\n";
 
-            if (players[pseudo]) {
-                ws.send("online");
-            } else {
-                ws.send("offline");
+            let i = 1;
+
+            for (const pseudo in players) {
+
+                list += `#${i}${pseudo}#${i}b\n`;
+
+                i++;
+
             }
+
+            ws.send(list.trim());
 
             return;
         }
 
         // =============================
-        // DEMANDE POSITION
+        // UPDATE POSITION JOUEUR
         // =============================
-        if (message.startsWith("P|")) {
+        if (message.startsWith("POS|")) {
 
-            const target = message.slice(2);
-            const requester = ws.pseudo;
-
-            if (!requester) {
-                ws.send("non enregistré");
-                return;
-            }
-
-            // joueur en ligne
-            if (players[target]) {
-                players[target].send("EP|" + requester);
-                return;
-            }
-
-            // joueur récemment déco
-            if (disconnectedPlayers[target]) {
-
-                const info = disconnectedPlayers[target];
-
-                if (Date.now() - info.time < DISCONNECT_MEMORY) {
-                    ws.send(`JD|${target}/${info.reason}`);
-                    return;
-                }
-
-                delete disconnectedPlayers[target];
-            }
-
-            ws.send("joueur introuvable");
-
-            return;
-        }
-
-        // =============================
-        // ENVOI POSITION
-        // =============================
-        if (message.startsWith("EPP|")) {
+            if (!ws.pseudo) return;
 
             const data = message.slice(4);
-            const parts = data.split("/");
 
-            const requester = parts[0];
-            const positionData = parts.slice(1).join("/");
+            // envoyer la position à tous les joueurs
+            for (const pseudo in players) {
 
-            const sender = ws.pseudo;
+                if (players[pseudo] !== ws) {
+                    players[pseudo].send(`POS|${ws.pseudo}/${data}`);
+                }
 
-            if (!players[requester]) {
-                ws.send("demandeur introuvable");
-                return;
             }
-
-            players[requester].send(`EPP|${sender}/${positionData}`);
 
             return;
         }
@@ -127,6 +93,7 @@ wss.on("connection", (ws) => {
         if (message.startsWith("D|")) {
 
             const reason = message.slice(2);
+
             const pseudo = ws.pseudo;
 
             if (!pseudo) return;
