@@ -1,7 +1,7 @@
 {
-  "name": "turbowarp-positions-server",
+  "name": "turbowarp-multiplayer-server",
   "version": "1.0.0",
-  "description": "Serveur WebSocket pour positions multijoueur TurboWarp",
+  "description": "Serveur multijoueur TurboWarp",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
