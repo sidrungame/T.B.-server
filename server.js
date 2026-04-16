@@ -1,26 +1,48 @@
 const WebSocket = require("ws");
 
-const PORT = 3000;
-const wss = new WebSocket.Server({ host: "0.0.0.0", port: PORT });
+const wss = new WebSocket.Server({ port: 3000 });
 
-console.log(`🟢 Serveur prêt sur ws://0.0.0.0:${PORT}`);
+let waitingPlayer = null;
 
-wss.on("connection", (ws, req) => {
-  const ip = req.socket.remoteAddress;
-  console.log(`👤 Nouveau joueur connecté depuis ${ip}`);
+wss.on("connection", (ws) => {
+  console.log("👤 Joueur connecté");
 
   ws.on("message", (msg) => {
-    console.log(`📩 Message reçu : ${msg.toString()}`);
+    const data = JSON.parse(msg);
 
-    // envoi à tous les autres clients SAUF l'expéditeur
-    wss.clients.forEach(client => {
-      if (client.readyState === WebSocket.OPEN && client !== ws) {
-        client.send(msg.toString());
+    // matchmaking simple
+    if (data.type === "join") {
+      if (waitingPlayer) {
+        ws.opponent = waitingPlayer;
+        waitingPlayer.opponent = ws;
+
+        ws.send(JSON.stringify({ type: "start", role: "player2" }));
+        waitingPlayer.send(JSON.stringify({ type: "start", role: "player1" }));
+
+        waitingPlayer = null;
+      } else {
+        waitingPlayer = ws;
+        ws.send(JSON.stringify({ type: "waiting" }));
       }
-    });
+      return;
+    }
+
+    // relayer au joueur adverse
+    if (ws.opponent && ws.opponent.readyState === WebSocket.OPEN) {
+      ws.opponent.send(JSON.stringify(data));
+    }
   });
 
   ws.on("close", () => {
-    console.log("❌ Joueur déconnecté");
+    console.log("❌ Déconnexion");
+
+    if (ws.opponent) {
+      ws.opponent.send(JSON.stringify({ type: "opponent_left" }));
+      ws.opponent.opponent = null;
+    }
+
+    if (waitingPlayer === ws) {
+      waitingPlayer = null;
+    }
   });
 });
