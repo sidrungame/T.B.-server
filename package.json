@@ -1,12 +1,16 @@
 {
-  "name": "turbowarp-multiplayer-server",
-  "version": "1.0.0",
-  "description": "Serveur multijoueur TurboWarp",
-  "main": "server.js",
-  "scripts": {
-    "start": "node server.js"
-  },
-  "dependencies": {
-    "ws": "^8.17.0"
-  }
+"name": "warhammer-online-server",
+"version": "1.0.0",
+"description": "Serveur WebSocket 1v1 pour jeu TurboWarp",
+"main": "server.js",
+"scripts": {
+"start": "node server.js",
+"dev": "node --watch server.js"
+},
+"keywords": ["websocket", "turbowarp", "game", "multiplayer"],
+"author": "",
+"license": "MIT",
+"dependencies": {
+"ws": "^8.18.0"
+}
 }
